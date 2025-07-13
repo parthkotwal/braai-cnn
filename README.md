@@ -9,7 +9,7 @@ My goal was to push myself beyond classical ML approaches and venture into an un
 <source src="spooky_sound.mp3">
 </audio>
 ```
-Building off of [a previous astrophysics + ML project](https://github.com/parthkotwal/Star-Class-Forest), I wanted to continue the trend of mastering these skills using data I actually understood and was interested in. This time, it was distinguishing real astrophysical events from false positives - a deceptively simple issue that's actually central to time domain astronomy.
+Building off of [a previous astrophysics + ML project](https://github.com/parthkotwal/Star-Class-Forest), I wanted to continue the trend of mastering these skills using data I actually understood and cared about. This time, it was distinguishing real astrophysical events from false positives - a deceptively simple issue that's actually central to time domain astronomy.
 
 This project was also a great learning exercise. Beyond implementing models and evaluating them, understanding the "why" behind their behavior:
 - Why does preserving spatial structure matter in classification?
