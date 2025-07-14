@@ -1,17 +1,11 @@
 # `braai-cnn`: Real/Bogus Transient Detection using CNNs and Classical ML
 
-This is a deep learning project focused on distinguishing true astrophysical events from false detections in Zwicky Transient Facility (ZTF) imaging data. The project reimplements the BRAAI CNN in both `PyTorch` and `CuPy` (GPU-accelerated `NumPy`) and evaluates them against classical machine learning models such as Logistic Regression and Random Forest classifiers.
+This is a deep learning project focused on distinguishing true astrophysical events from false detections in Zwicky Transient Facility (ZTF) imaging data. The project reimplements Duev et al. (2019)'s Bogus/Real Adversarial AI (`braai`) CNN in both `PyTorch` and `CuPy` (GPU-accelerated `NumPy`) and evaluates them against classical machine learning models such as Logistic Regression and Random Forest classifiers. 
 
-## Objective
-My goal was to push myself beyond classical ML approaches and venture into an untapped land-**deep learning**. 
-```
-<audio controls>
-<source src="spooky_sound.mp3">
-</audio>
-```
-Building off of [a previous astrophysics + ML project](https://github.com/parthkotwal/Star-Class-Forest), I wanted to continue the trend of mastering these skills using data I actually understood and cared about. This time, it was distinguishing real astrophysical events from false positives - a deceptively simple issue that's actually central to time domain astronomy.
+**Note: While this project is inspired by the BRAAI paper's approach to real/bogus classification in ZTF data, it does not attempt a strict reproduction of their results. Due to differences in available data splits, batch sizes, and RB score thresholding, my model results are not directly comparable to those in the original study. However, the architectural inspiration of the model and core problem we aim to address remain aligned.** ❤️
 
-This project was also a great learning exercise. Beyond implementing models and evaluating them, understanding the "why" behind their behavior:
-- Why does preserving spatial structure matter in classification?
-- Why does model architecture shape what the model learns and misses?
-- Why do some regions of the dataset end up with oddly specific weights and biases?
+## Problem
+Time domain analysis has been central to astronomical research since the Scientific Revolution in the 1600s. 
+In an effort to identify transient objects that rapidly change in brightness or position (comets, gamma ray bursts, supernovae, etc.), modern real-time detection systems like the Zwicky Transient Facility (ZTF) generate massive volumes of candidate events per night. However, many of these events are spurious (bogus) detections caused by instrumental noise, data processing errors, or other artifacts (false alarms). ZTF alone generates hundreds of thousands of candidates nightly, making manual inspection infeasible and demonstrating a need for accurate and automated classification systems. The challenge lies in correclty differentiating true transients from bogus detections, often using only a small image cutout around each candidate. These cutouts are often noisy, low-resolution, and can contain subtle features that even expert may disagree on.
+
+This is known as the **real/bogus classification** task, and it is foundational in automating modern sky surveys. Machine learning algorithms, especially deep learning models, are frequently employed for their ability to pick up on patterns in these cutouts and automate their way through billions of candidates. One such example is the `braai` CNN, a deep model proposed by Duev et al. (2019), which presented expectional performance on ZTF imaging data using convolutional architectures. In contrast to earlier models based on flattened pixel arrays or hand-engineered features, their work underlined the value of preserving spatial structure in this specific classification task.
