@@ -6,6 +6,27 @@ This is a deep learning project focused on distinguishing true astrophysical eve
 
 ## Problem
 Time domain analysis has been central to astronomical research since the Scientific Revolution in the 1600s. 
-In an effort to identify transient objects that rapidly change in brightness or position (comets, gamma ray bursts, supernovae, etc.), modern real-time detection systems like the Zwicky Transient Facility (ZTF) generate massive volumes of candidate events per night. However, many of these events are spurious (bogus) detections caused by instrumental noise, data processing errors, or other artifacts (false alarms). ZTF alone generates hundreds of thousands of candidates nightly, making manual inspection infeasible and demonstrating a need for accurate and automated classification systems. The challenge lies in correclty differentiating true transients from bogus detections, often using only a small image cutout around each candidate. These cutouts are often noisy, low-resolution, and can contain subtle features that even expert may disagree on.
+In an effort to identify transient objects that rapidly change in brightness or position (comets, gamma ray bursts, supernovae, etc.), modern real-time detection systems like the Zwicky Transient Facility (ZTF) generate massive volumes of candidate events per night. However, many of these events are spurious (bogus) detections caused by instrumental noise, data processing errors, or other artifacts (false alarms). ZTF alone generates hundreds of thousands of candidates nightly, thus making manual inspection infeasible and demonstrating a need for automated, but highly accurate, classification systems. The challenge lies in correctly differentiating true transients from bogus detections, often using only a small image cutout around each candidate. These cutouts are often noisy, low-resolution, and can contain subtle features that even experts may disagree on.
 
-This is known as the **real/bogus classification** task, and it is foundational in automating modern sky surveys. Machine learning algorithms, especially deep learning models, are frequently employed for their ability to pick up on patterns in these cutouts and automate their way through billions of candidates. One such example is the `braai` CNN, a deep model proposed by Duev et al. (2019), which presented expectional performance on ZTF imaging data using convolutional architectures. In contrast to earlier models based on flattened pixel arrays or hand-engineered features, their work underlined the value of preserving spatial structure in this specific classification task.
+This is known as the **real/bogus classification** task, and it is foundational in automating modern sky surveys. Machine learning algorithms, especially deep learning models, are frequently employed for their ability to pick up on patterns in these cutouts and automate their way through billions of candidates. 
+
+One such example is the `braai` CNN, a deep model proposed by Duev et al. (2019), which presented expectional performance on ZTF imaging data using convolutional architectures. In contrast to earlier models based on flattened pixel arrays or hand-engineered features, their work underlined the value of preserving spatial structure in this specific classification task.
+
+## Dataset
+- **Source**: [University of Washington's ZTF Alert Archive](https://ztf.uw.edu/alerts/public/)
+    - March 2nd, 2025 dataset
+- **Size**: 38,368 labeled samples
+    - 3 Channels: Science, Template, Difference
+    - Padded to 63 x 63 
+    - Normalized to `[0,1]`
+- **Labels**:
+    - 0 = Bogus (~20,274)
+    - 1 = Real (~18,094)
+        - Threshold: RB Score > 0.7 in raw data 
+- **Split**: 
+    - Train Size: 75% (~28,776)
+    - Test Size: 25% (~9,592)
+
+![Bogus Image Example](/images/bogus_example.png)
+
+![Real Image Example](/images/real_example.png)
