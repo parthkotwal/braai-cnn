@@ -2,7 +2,7 @@ import cupy as np
 import numpy
 from cupyx.scipy.signal import correlate2d, convolve2d
 from cupy.lib.stride_tricks import sliding_window_view
-
+import gc
 
 # Layer interface
 class Layer:
@@ -291,6 +291,7 @@ def BCEG(y_true, y_pred):
     y_pred = np.clip(y_pred, 1e-15, 1-(1e-15))
     return (y_pred - y_true) / (y_pred * (1 - y_pred))
 
+
 class NumpyCNN:
     def __init__(self):
         self.layers = [
@@ -327,12 +328,31 @@ class NumpyCNN:
             grad = layer.backward(grad, lr)
         return grad
 
-    def predict(self, x):
+
+    def predict(self, X, batch_size=16):
+        self.eval()
+        preds = []
+        for i in range(0, len(X), batch_size):
+            x_batch = X[i:i+batch_size]
+            x = x_batch
+            for layer in self.layers:
+                if isinstance(layer, Dropout):
+                    layer.training = False
+                x = layer.forward(x)
+            preds.append(x)
+
+            gc.collect()
+            np.get_default_memory_pool().free_all_blocks()
+            np.cuda.Device().synchronize()
+
+        return np.concatenate(preds, axis=0)
+
+
+    def eval(self):
         for layer in self.layers:
             if isinstance(layer, Dropout):
                 layer.training = False
-            x = layer.forward(x)
-        return x
+
 
     def save(self, filename):
         save_dict = {}
