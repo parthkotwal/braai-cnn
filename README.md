@@ -10,8 +10,6 @@ In an effort to identify transient objects that rapidly change in brightness or 
 
 This is known as the **real/bogus classification** task, and it is foundational in automating modern sky surveys. Machine learning algorithms, especially deep learning models, are frequently employed for their ability to pick up on patterns in these cutouts and automate their way through billions of candidates. One such example is the `braai` CNN, a deep model proposed by Duev et al. (2019), which presented expectional performance on ZTF imaging data using convolutional architectures. In contrast to earlier models based on flattened pixel arrays or hand-engineered features, their work underlined spatial structure in this specific classification task.
 
-## Objective
-
 ## Dataset
 - **Source**: [University of Washington's ZTF Alert Archive](https://ztf.uw.edu/alerts/public/)
     - March 2nd, 2025 dataset
@@ -54,12 +52,78 @@ With a dataset size of ~30,000 images, the data was split into 81% train, 9% val
 
 `braai` served as an architectural and conceptual reference for the models in my project, however differed in training data, data splits, key hyperparameters (ex: learning rate), and frameworks.
 
-1. ### `CuPy`/`NumPy` CNN
+### 1. `CuPy`/`NumPy` CNN
 This model was trained with an NVIDIA L4 Tensor Core GPU and had a training time of ~35 minutes. As mentioned before, this CNN resembles `braai` in terms of several characteristics such as architecture (see above), optimizer, input shape and more. 
 
 Each layer (`Conv2D`, `ReLU`, `FC`, etc.) is implemented as a modular class with its own `.forward()` and `.backward()` methods. The `Dropout` layer is toggled per mode (train/eval). The `Conv2D` layers were initialized with He initialization, a common weight initialization method for ReLu activated layers. However, the `FC` layer used Xavier due to exploding gradients that were seen in initial training runs. 
 
 The training loop was equipped with early stopping using validation loss (patience = 5). Hyperparameters included a batch size = `64`, learning rate = `0.001`, and validation split = `0.2`. Training stopped at 20 epochs.
+
+The following snippet shows the layer-by-layer forward and backward pass functions over the network.
+
+```
+class NumpyCNN:
+    # Other functions
+    def forward(self, x):
+        for i, layer in enumerate(self.layers):
+            if isinstance(layer, Dropout):
+                layer.training = True
+            x = layer.forward(x)
+        return x
+
+    def backward(self, grad, lr):
+        for layer in reversed(self.layers):
+            grad = layer.backward(grad, lr)
+        return grad
+```
+
+After `.forward()`, the mean of the binary cross entropy loss for each predicted value is calculated and used to update the total loss. The `BCEG()` function computes the derivative/gradient of the BCE loss with respect to `y_pred` and passed backwards through the network (only during training).
+
+```
+def BCE(y_true, y_pred):
+    y_pred = np.clip(y_pred, 1e-15, 1-(1e-15))
+    return -(y_true*np.log(y_pred) + (1-y_true) * np.log(1-y_pred))
+
+def BCEG(y_true, y_pred):
+    y_pred = np.clip(y_pred, 1e-15, 1-(1e-15))
+    return (y_pred - y_true) / (y_pred * (1 - y_pred))
+```
+
+To accelerate computation on the GPU (significantly), the `Conv2D` and `MaxPool2D` layers internally use **im2col** and **col2im** techniques. These convert lengthy spatial operations into more efficient matrix multiplications that GPUs can compute in parallel. This critical change from direct cross-correlation and convolution was implemented after finding that training would have originally lasted ~33 days.
+
+```
+from cupy.lib.stride_tricks import sliding_window_view
+
+# Converts NCHW input to column matrix
+def im2col(input, KH, KW, stride=1):
+    N, C, H, W = input.shape
+    OH = (H - KH) // stride + 1
+    OW = (W - KW) // stride + 1
+
+    patches = sliding_window_view(input, (KH, KW), axis=(2,3))
+    patches = patches[:, :, ::stride, ::stride, :, :]
+    cols = patches.transpose(0,2,3,1,4,5).reshape(N*OH*OW, -1)
+    return cols, OH, OW
+
+# Reverse of im2col for accumulating gradients to x
+def col2im(cols, input_shape, KH, KW, stride=1):
+    N, C, H, W = input_shape
+    OH = (H - KH) // stride + 1
+    OW = (W - KW) // stride + 1
+
+    patches = cols.reshape(N, OH, OW, C, KH, KW).transpose(0, 3, 4, 5, 1, 2)
+    x_grad = np.zeros(input_shape, dtype=cols.dtype)
+
+    for i in range(KH):
+        for j in range(KW):
+            x_grad[:, :, i:i+stride*OH:stride, j:j+stride*OW:stride] += patches[:, :, i, j]
+    return x_grad
+```
+Here is a GIF/JIF that illustrates this genius technique:
+
+![im2col GIF](/images/im2col.gif)
+
+
 
 ## Evaluation
 
