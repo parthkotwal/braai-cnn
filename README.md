@@ -2,7 +2,7 @@
 
 This is a deep learning project focused on distinguishing true astrophysical events from false detections in Zwicky Transient Facility (ZTF) imaging data. The project reimplements Duev et al. (2019)'s Bogus/Real Adversarial AI (`braai`) CNN in both `PyTorch` and `CuPy` (GPU-accelerated `NumPy`) and evaluates them against classical machine learning models such as Logistic Regression and Random Forest classifiers. 
 
-**Note: While this project is inspired by the BRAAI paper's approach to real/bogus classification in ZTF data, it does not attempt a strict reproduction of their results. Due to differences in available data splits, batch sizes, and RB score thresholding, my model results are not directly comparable to those in the original study. However, the architectural inspiration of the model and core problem we aim to address remain aligned.** ❤️
+**Note: While this project is inspired by the BRAAI paper's approach to real/bogus classification in ZTF data, it does not attempt a strict reproduction of their results. Due to differences in training data, hyperparameters, and other critical factors that shape performance, my model results are not directly comparable to those in the original study. However, the architectural inspiration of the model and core problem we aim to address remain aligned.** ❤️
 
 ## Problem
 Time domain analysis has been central to astronomical research since the Scientific Revolution in the 1600s. 
@@ -53,9 +53,15 @@ With a dataset size of ~30,000 images, the data was split into 81% train, 9% val
 `braai` served as an architectural and conceptual reference for the models in my project, however differed in training data, data splits, key hyperparameters (ex: learning rate), and frameworks.
 
 ### 1. `CuPy`/`NumPy` CNN
+
+> [CuPy CNN Training Notebook on Google Colab](https://colab.research.google.com/drive/1f3Jbdesz5PL7CKwdPn_G-7eoZoDwzVj_?usp=drive_link)
+
 This model was trained with an NVIDIA L4 Tensor Core GPU and had a training time of ~35 minutes. As mentioned before, this CNN resembles `braai` in terms of several characteristics such as architecture (see above), optimizer, input shape and more. 
 
 Each layer (`Conv2D`, `ReLU`, `FC`, etc.) is implemented as a modular class with its own `.forward()` and `.backward()` methods. The `Dropout` layer is toggled per mode (train/eval). The `Conv2D` layers were initialized with He initialization, a common weight initialization method for ReLu activated layers. However, the `FC` layer used Xavier due to exploding gradients that were seen in initial training runs. 
+
+![He initialization](/images/he.png)
+![Xavier initialization](/images/xavier.png)
 
 The training loop was equipped with early stopping using validation loss (patience = 5). Hyperparameters included a batch size = `64`, learning rate = `0.001`, and validation split = `0.2`. Training stopped at 20 epochs.
 
@@ -89,7 +95,11 @@ def BCEG(y_true, y_pred):
     return (y_pred - y_true) / (y_pred * (1 - y_pred))
 ```
 
-To accelerate computation on the GPU (significantly), the `Conv2D` and `MaxPool2D` layers internally use **im2col** and **col2im** techniques. These convert lengthy spatial operations into more efficient matrix multiplications that GPUs can compute in parallel. This critical change from direct cross-correlation and convolution was implemented after finding that training would have originally lasted ~33 days.
+To accelerate computation on the GPU (significantly), the `Conv2D` and `MaxPool2D` layers internally use **im2col** and **col2im** techniques for forward and backward passes respectively. These convert the lengthy spatial operations into more efficient matrix multiplications that GPUs can compute in parallel. This critical change was implemented after finding that training would have originally lasted **~67 days**. Instead of directly performing the cross-correlation and convolution between each kernel and each of the samples' channels on the CPU, the operation is simplifed into one giant matrix multiplication that GPUs exce; in. That's a **99.97% decrease in training time**. Here is a GIF/JIF that illustrates this genius technique:
+
+![im2col GIF](/images/im2col.gif)
+
+Here are my helper functions:
 
 ```
 from cupy.lib.stride_tricks import sliding_window_view
@@ -119,13 +129,103 @@ def col2im(cols, input_shape, KH, KW, stride=1):
             x_grad[:, :, i:i+stride*OH:stride, j:j+stride*OW:stride] += patches[:, :, i, j]
     return x_grad
 ```
-Here is a GIF/JIF that illustrates this genius technique:
 
-![im2col GIF](/images/im2col.gif)
+This model emphasized low level design decisions that can affect training stability, speed, convergence, and of course, *learning*. Though the `im2col` technique improved training time, it wasn't necessarily memory efficient. As a result, the training pipeline manually ran Python's garbage collector, `gc`, to manage GPU memory occupied by large batch sizes. Additionally, the use of an optimizer also determined how backpropagation here differed from traditional implementations.
 
+### 2. `PyTorch` CNN
 
+> [PyTorch CNN Training Notebook on Google Colab](https://colab.research.google.com/drive/1f3Jbdesz5PL7CKwdPn_G-7eoZoDwzVj_?usp=drive_link)
+
+To benchmark my custom `CuPy` model against a high level framework, I recreated the same VGG6 architecture in `PyTorch`. Training data, optimizer, learning rate, and other parameters were the same as the `CuPy` model (see above). This network was trained using an NVIDIA T4 GPU and lasted for a bit under 3 minutes, stopping at Epoch 38. Implementation was rather straightforward, due to PyTorch's modular API and having already implemented a low-level version of the model previously.
+
+```
+import torch.nn as nn
+import torch.nn.functional as F
+
+class PyTorchCNN(nn.Module):
+    def __init__(self):
+        super(PyTorchCNN, self).__init__()
+
+        # Block 1:
+        self.conv1_1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
+        self.conv1_2 = nn.Conv2d(in_channels=16, out_channels=16, kernel_size=3, padding=1)
+        self.pool1 = nn.MaxPool2d(stride=2, kernel_size=2)
+        self.dropout1 = nn.Dropout(0.25)
+
+        # Block 2:
+        self.conv2_1 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
+        self.conv2_2 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding=1)
+        self.pool2 = nn.MaxPool2d(stride=4, kernel_size=2)
+        self.dropout2 = nn.Dropout(0.25)
+
+        # Fully connected layers
+        self.fc1 = nn.Linear(in_features=2048, out_features=256)
+        self.dropout3 = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(in_features=256, out_features=1)
+
+    def forward(self, x):
+        # Block 1:
+        x = F.relu(self.conv1_1(x))
+        x = F.relu(self.conv1_2(x))
+        x = self.pool1(x)
+        x = self.dropout1(x)
+
+        # Block 2:
+        x = F.relu(self.conv2_1(x))
+        x = F.relu(self.conv2_2(x))
+        x = self.pool2(x)
+        x = self.dropout2(x)
+
+        # FC
+        x = x.view(x.size(0), -1)
+        x = F.relu(self.fc1(x))
+        x = self.dropout3(x)
+        x = self.fc2(x)
+        x = F.sigmoid(x)
+
+        return x
+```
+
+### 3. Logistic Regression
+
+> ![Baseline Model Training Notebook](/images/1_baseline_model.ipynb)
+
+To establish a classical baseline, I trained a simple Logistic Regression model on the same dataset used for the deep learning models. Each 3 x 63 × 63 cutout was flattened into a single 11,907 dimensional vector, which discarded the data's spatial structure. Shape: `(28776, 11907)`
+
+Both the Logistic Regression and Random Forest were trained locally on a Macbook Pro M4; training lasted for ~2 and ~5 minutes respectively (see below). 
+
+I used `scikit-learn`'s `LogisticRegression` model, with the following hyperparameters:
+- `max_iter = 1000`
+- `random_state = 42`
+- All other hyperparameters were default
+
+```
+# Logistic Regression Classifier
+from sklearn.linear_model import LogisticRegression
+
+lrc = LogisticRegression(max_iter=1000, random_state=42)
+lrc.fit(X_flat_train, y_train)
+```
+
+Unlike the CNNs, this model has no awareness of spatial structure. Each pixel is treated as another feature.
+
+### 4. Random Forest
+
+> ![Baseline Model Training Notebook](/images/1_baseline_model.ipynb)
+
+To complement the linearity of Logistic Regression, I also trained a Random Forest Classifier using the same flattened input features. The Random Forest model served as a stronger classical baseline with its ability to handle higher dimensional inputs.
+
+```
+# Random Forest Classifier
+from sklearn.ensemble import RandomForestClassifier
+
+rfc = RandomForestClassifier(n_estimators=100, random_state=42)
+rfc.fit(X_flat_train, y_train)
+```
 
 ## Evaluation
+
+
 
 ## Key Outcomes
 
