@@ -188,7 +188,7 @@ class PyTorchCNN(nn.Module):
 
 ### 3. Logistic Regression
 
-> ![Baseline Model Training Notebook](/images/1_baseline_model.ipynb)
+> [Baseline Model Training Notebook](/images/1_baseline_model.ipynb)
 
 To establish a classical baseline, I trained a simple Logistic Regression model on the same dataset used for the deep learning models. Each 3 x 63 × 63 cutout was flattened into a single 11,907 dimensional vector, which discarded the data's spatial structure. Shape: `(28776, 11907)`
 
@@ -211,7 +211,7 @@ Unlike the CNNs, this model has no awareness of spatial structure. Each pixel is
 
 ### 4. Random Forest
 
-> ![Baseline Model Training Notebook](/images/1_baseline_model.ipynb)
+> [Baseline Model Training Notebook](/images/1_baseline_model.ipynb)
 
 To complement the linearity of Logistic Regression, I also trained a Random Forest Classifier using the same flattened input features. The Random Forest model served as a stronger classical baseline with its ability to handle higher dimensional inputs.
 
