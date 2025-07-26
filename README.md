@@ -60,7 +60,12 @@ This model was trained with an NVIDIA L4 Tensor Core GPU and had a training time
 
 Each layer (`Conv2D`, `ReLU`, `FC`, etc.) is implemented as a modular class with its own `.forward()` and `.backward()` methods. The `Dropout` layer is toggled per mode (train/eval). The `Conv2D` layers were initialized with He initialization, a common weight initialization method for ReLu activated layers. However, the `FC` layer used Xavier due to exploding gradients that were seen in initial training runs. 
 
+He initialization:
+
 ![He initialization](/images/he.png)
+
+Xavier initialization:
+
 ![Xavier initialization](/images/xavier.png)
 
 The training loop was equipped with early stopping using validation loss (patience = 5). Hyperparameters included a batch size = `64`, learning rate = `0.001`, and validation split = `0.2`. Training stopped at 20 epochs.
@@ -95,7 +100,7 @@ def BCEG(y_true, y_pred):
     return (y_pred - y_true) / (y_pred * (1 - y_pred))
 ```
 
-To accelerate computation on the GPU (significantly), the `Conv2D` and `MaxPool2D` layers internally use **im2col** and **col2im** techniques for forward and backward passes respectively. These convert the lengthy spatial operations into more efficient matrix multiplications that GPUs can compute in parallel. This critical change was implemented after finding that training would have originally lasted **~67 days**. Instead of directly performing the cross-correlation and convolution between each kernel and each of the samples' channels on the CPU, the operation is simplifed into one giant matrix multiplication that GPUs exce; in. That's a **99.97% decrease in training time**. Here is a GIF/JIF that illustrates this genius technique:
+To accelerate computation on the GPU (significantly), the `Conv2D` and `MaxPool2D` layers internally use **im2col** and **col2im** techniques for forward and backward passes respectively. These convert the lengthy spatial operations into more efficient matrix multiplications that GPUs can compute in parallel. This critical change was implemented after finding that training would have originally lasted **~67 days**. Instead of directly performing the cross-correlation and convolution between each kernel and each of the samples' channels on the CPU, the operation is simplifed into one giant matrix multiplication that GPUs excel in. That's a **99.97% decrease in training time**. Here is a GIF/JIF that illustrates this genius technique:
 
 ![im2col GIF](/images/im2col.gif)
 
@@ -225,8 +230,168 @@ rfc.fit(X_flat_train, y_train)
 
 ## Evaluation
 
+All models were evaluated on the same held-out test set of 9,592 labelled samples in a unified pipeline.
 
+Key metrics included:
+
+- Accuracy, Precision, Recall, F1 Score, ROC AUC
+- FNR–FPR at various decision thresholds
+- Inference time per sample
+- Confusion matrices
+- Visual comparisons of ROC, PRC, and threshold behavior
+
+### Classification Metrics
+Here are each of the models ranked by their metrics on the test data.
+
+#### Accuracy
+
+| Rank | Model Name       | Accuracy   |
+|------|------------------|------------|
+| 1    | PyTorch CNN      | 0.8261     |
+| 2    | NumPy CNN        | 0.8017     |
+| 3    | Random Forest    | 0.7750     |
+| 4    | Logistic Regression | 0.6617 |
+
+Proportion of correct predictions out of all predictions. As our dataset was only slightly imbalanced, accuracy is a great indicator of performance here. Both CNNs outperform the baseline models, however the Random Forest is not far off.
+
+#### Precision
+
+| Rank | Model Name       | Precision  |
+|------|------------------|------------|
+| 1    | PyTorch CNN      | 0.7996     |
+| 2    | Random Forest    | 0.7717     |
+| 3    | NumPy CNN        | 0.7586     |
+| 4    | Logistic Regression | 0.6440 |
+
+Proportion of positive predictions that were correct. Higher precision is crucial when false positives are costly (ex: triggering follow ups). Surprisingly, the NumPy CNN falls behind the Random Forest.
+
+
+#### Recall
+
+| Rank | Model Name       | Recall     |
+|------|------------------|------------|
+| 1    | NumPy CNN        | 0.8499     |
+| 2    | PyTorch CNN      | 0.8424     |
+| 3    | Random Forest    | 0.7426     |
+| 4    | Logistic Regression | 0.6317 |
+
+Proportion of positives that were predicted correctly. Recall is significant in this situation to minimize false negatives. As the following PR curve shows, the PyTorch CNN is clearly superior, maintaining a high precision even as recall increases.
+
+![PR Curve](/images/prc.png)
+
+
+#### F1 Score
+
+| Rank | Model Name       | F1 Score   |
+|------|------------------|------------|
+| 1    | PyTorch CNN      | 0.8204     |
+| 2    | NumPy CNN        | 0.8017     |
+| 3    | Random Forest    | 0.7569     |
+| 4    | Logistic Regression | 0.6378 |
+
+Harmonic mean of precision and recall. A balanced metric when both false positives and false negatives matter.
+
+
+#### ROC AUC
+
+| Rank | Model Name       | ROC AUC    |
+|------|------------------|------------|
+| 1    | PyTorch CNN      | 0.9105     |
+| 2    | NumPy CNN        | 0.8902     |
+| 3    | Random Forest    | 0.8551     |
+| 4    | Logistic Regression | 0.7113 |
+
+Area under Receiver Operating Characteristic Curve. The area represents the probability that the model ranks a randomly chosen positive instance higher than a randomly chosen negative one. In other words, it summarizes the model's ability to distinguish between two classes. 
+
+![ROC Curve](/images/roc.png)
+
+
+### FPR vs FNR Analysis
+
+The following plots mirror an analysis done in the `braai` paper and show where models balance false alarms vs. missed detections
+
+Logistic Regression:
+
+![Logistic Regression FPR vs FNR Curve](/images/fnrfpr_logreg.png)
+
+Random Forest:
+
+![Random Forest FPR vs FNR Curve](/images/fnrfpr_forest.png)
+
+`CuPy`/`NumPy` CNN:
+
+![NumPy CNN FPR vs FNR Curve](/images/fnrfpr_numpy.png)
+
+`PyTorch` CNN:
+
+![PyTorch CNN FPR vs FNR Curve](/images/fnrfpr_torch.png)
+
+### Confusion Matrices
+
+| Model             | Confusion Matrix |
+|------------------|------------------|
+| Logistic Regression | ![LogReg CM](/images/matrix_logreg.png) |
+| Random Forest       | ![RF CM](/images/matrix_forest.png)         |
+| CuPy CNN            | ![NumPy CM](/images/matrix_numpy.png)     |
+| PyTorch CNN         | ![Torch CM](/images/matrix_torch.png)   |
+
+### Inference Times
+
+| Rank | Model Name       | Inference Time (s) |
+|------|------------------|--------------------|
+| 1    | Logistic Regression | 0.2920          |
+| 2    | PyTorch CNN      | 0.4212             |
+| 3    | Random Forest    | 0.5734             |
+| 4    | NumPy CNN        | 78.5150            |
+
+Finally, I calculated each models' inference time, or how quickly each model can make predictions. Logistic Regression was the fastest but also had the poorest performance, while the NumPy CNN is incredibly slower.
+
+### Summary Table
+| Model Name       | Accuracy   | Precision | Recall    | F1 Score  | ROC AUC   | FNR=FPR Threshold | FNR@Threshold (%) | FPR@Threshold (%) | Inference Time (s) |
+|------------------|------------|-----------|-----------|-----------|-----------|--------------------|--------------------|--------------------|---------------------|
+| Logistic Regression | 0.6617     | 0.6440    | 0.6317    | 0.6378    | 0.7113    | 0.4635             | 33.47              | 33.56              | 0.2920              |
+| Random Forest     | 0.7750     | 0.7717    | 0.7426    | 0.7569    | 0.8551    | 0.4805             | 22.82              | 22.37              | 0.5734              |
+| NumPy CNN         | 0.8017     | 0.7586    | 0.8499    | 0.8017    | 0.8902    | 0.5546             | 19.77              | 19.67              | 78.5150             |
+| PyTorch CNN       | 0.8261     | 0.7996    | 0.8424    | 0.8204    | 0.9105    | 0.5295             | 17.31              | 17.26              | 0.4212              |
 
 ## Key Outcomes
 
-## Learnings
+The evaluation results illustrated clear distinctions in performance, trade off, and practical aspects across all four models:
+
+### 1. Deep learning > classical models
+
+The `PyTorch` and `NumPy` CNNs dominated the Logistic Regression and Random Forest baseline models in nearly every category:
+
+- `PyTorch` CNN achieved the highest accuracy (82.6%), F1 Score (82.0%), and ROC AUC (0.9105). This is the the most balanced and reliable model overall.
+- `NumPy` CNN, though written from scratch, followed with strong recall and ROC AUC. Its success confirms the robustness of the custom implementation despite a lengthy inference time.
+- Classical models that are trained and tested on flattened inputs, simply cannot capture spatial patterns
+
+### 2. Scratch vs framework
+
+Interestingly, the `CuPy` CNN's performance was almost on par with the `PyTorch` version. This is despite being trained using a manual backprop pipeline and custom operations, however comes at the cost of engineering time.
+
+### 3. Threshold behavior matters
+
+In our FNR-FPR analysis, CNNs maintained better FNR–FPR balance. Logistic Regression showed a more significant drop-off when moving away from its `FNR = FPR` threshold which reinforces that simple models may break down in uncertain operating ranges. CNNs are simply more accurate and more stable across decision boundaries.
+
+### 4. Justice for classical models!!
+
+Although underperforming overall, Random Forest was surprisingly competitive:
+
+- Exceeded Logistic Regression by ~11% in accuracy and had a significantly better AUC (0.86 vs. 0.71) while not being far behind the deep learning models
+
+- More memory efficient than both CNNs
+
+- May be a strong choice for fast and efficient baseline filtering
+
+## Conclusion + Learnings
+
+At the start of this project, I expected deep learning to outperform everything else (and it did), but I didn’t expect how much infrastructure matters. The `PyTorch` model trained in minutes and gave great results. My own `NumPy`/`CuPy` implementation took far longer to run and debug, but seeing the training loop finish and save the model is an unmatched feeling. I was able to apply CNNs in a context I was interested in, that too at a much deeper level than just calling `model.fit()`.
+
+I also grasped how how performance metrics don’t tell the whole story. Criterion like inference time, threshold sensitivity, and implementation complexity were something I hadn't considered in the past; they shape whether a model is usable and deployable, especially in the context of a large scale sky survey.
+
+Finally, I have a **much stronger appreciation** for the original BRAAI paper. This was the first research paper I've read through and studied thorougly, and even though I didn’t copy their model exactly, I now understand how much thought went into their decisions and the complementary tools they built for astrophysical research.
+
+I started this as a machine learning exercise. I finished it with a significantly better understanding of what it takes to turn a whiteboard design to code. If you have any feedback, questions, or comments, always feel free to reach out.
+
+Parth Kotwal ❤️
