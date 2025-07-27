@@ -390,8 +390,28 @@ At the start of this project, I expected deep learning to outperform everything 
 
 I also grasped how how performance metrics don’t tell the whole story. Criterion like inference time, threshold sensitivity, and implementation complexity were something I hadn't considered in the past; they shape whether a model is usable and deployable, especially in the context of a large scale sky survey.
 
-Finally, I have a **much stronger appreciation** for the original BRAAI paper. This was the first research paper I've read through and studied thorougly, and even though I didn’t copy their model exactly, I now understand how much thought went into their decisions and the complementary tools they built for astrophysical research.
+Finally, I have a **much stronger appreciation** for the original BRAAI paper. This project builds on the incredible work done by its team, who I’d like to thank the authors for making their model architecture and insights accessible. This was the first research paper I've read through and studied thorougly, and even though I didn’t copy their model exactly, I now understand how much thought went into their decisions and the complementary tools they built for astrophysical research.
 
 I started this as a machine learning exercise. I finished it with a significantly better understanding of what it takes to turn a whiteboard design to code. If you have any feedback, questions, or comments, always feel free to reach out.
 
 Parth Kotwal ❤️
+
+## References
+
+1. Duev, D. A., Mahabal, A., Masci, F. J., Graham, M. J., Rusholme, B., Walters, R., Karmarkar, I., Frederick, S., Kasliwal, M. M., Rebbapragada, U., & Ward, C. (2019). Real-bogus classification for the Zwicky Transient Facility using deep learning. Monthly Notices of the Royal Astronomical Society, 489(3), 3582–3590. https://doi.org/10.1093/mnras/stz2357
+
+2. https://github.com/dmitryduev/braai
+
+3. Alert Archive. (n.d.). https://ztf.uw.edu/alerts/public/
+
+### Resources I used and recommend:
+
+4. Zhou, V. (2019, May 22). CNNS, Part 1: An Introduction to Convolutional Neural Networks. victorzhou.com. https://victorzhou.com/blog/intro-to-cnns-part-1/
+
+5. Convolutional Neural Network with Numpy (Fast) - HackMD. (n.d.). HackMD. https://hackmd.io/@machine-learning/blog-post-cnnumpy-fast
+
+6. [Convolutional Neural Network from Scratch | Mathematics & Python Code](https://www.youtube.com/watch?v=Lakz2MoHy6o&ab_channel=TheIndependentCode)
+
+7. [Accelerating Pooling through Im2col and Col2im Instructions in the DaVinci Architecture](https://www.youtube.com/watch?v=xrLEhUSKa_4)
+
+8. [PyTorch Conv2d Explained](https://www.youtube.com/watch?v=j19Wdlu7Rtg)
